@@ -1,0 +1,6 @@
+{
+  "max_connections_per_company": 3,
+  "connection_message_template": "Hi {name}, This is Suyash. I was wondering whether you were hiring for APM positions at {company}?",
+  "delay_between_requests": [5, 10],
+  "headless": false
+}
