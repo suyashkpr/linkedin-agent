@@ -123,6 +123,120 @@ class LinkedInAgent:
             
             time.sleep(self.config.waiting_time)
             
+            # # Click "All filters" button to open filters
+            # try:
+            #     all_filters_button = None
+            #
+            #     # Look for "All filters" button using manual search
+            #     all_buttons = self.driver.find_elements(By.TAG_NAME, "button")
+            #     for button in all_buttons:
+            #         button_text = (button.text or "").lower()
+            #         inner_html = (button.get_attribute("innerHTML") or "").lower()
+            #
+            #         if ('all filters' in button_text or 'all filters' in inner_html) and button.is_enabled() and button.is_displayed():
+            #             all_filters_button = button
+            #             logger.info(f"Found All filters button: text='{button.text}'")
+            #             break
+            #
+            #     if all_filters_button:
+            #         all_filters_button.click()
+            #         time.sleep(2)
+            #         logger.info("Clicked All filters button")
+            #     else:
+            #         logger.warning("Could not find All filters button")
+            # except Exception as e:
+            #     logger.warning(f"Error clicking All filters button: {str(e)}")
+            #
+            # # Now handle company filtering in the opened filters dialog
+            # try:
+            #     # Look for "Add a company" button or input field
+            #     time.sleep(1)
+            #
+            #     # Try to find "Add a company" button
+            #     add_company_button = None
+            #     all_buttons = self.driver.find_elements(By.TAG_NAME, "button")
+            #     for button in all_buttons:
+            #         button_text = (button.text or "").lower()
+            #         inner_html = (button.get_attribute("innerHTML") or "").lower()
+            #
+            #         if ('add a company' in button_text or 'add a company' in inner_html or
+            #             'company' in button_text or 'company' in inner_html) and button.is_enabled() and button.is_displayed():
+            #             add_company_button = button
+            #             logger.info(f"Found Add company button: text='{button.text}'")
+            #             break
+            #
+            #     if add_company_button:
+            #         add_company_button.click()
+            #         time.sleep(1)
+            #
+            #         # Look for company input field
+            #         company_input = None
+            #         inputs = self.driver.find_elements(By.TAG_NAME, "input")
+            #         for input_field in inputs:
+            #             placeholder = (input_field.get_attribute("placeholder") or "").lower()
+            #             if 'company' in placeholder and input_field.is_enabled() and input_field.is_displayed():
+            #                 company_input = input_field
+            #                 logger.info(f"Found company input field with placeholder: '{input_field.get_attribute('placeholder')}'")
+            #                 break
+            #
+            #         if company_input:
+            #             # Type the company name
+            #             company_input.clear()
+            #             company_input.send_keys(company_name)
+            #             time.sleep(2)
+            #             # Click the input box again to trigger suggestions
+            #             company_input.click()
+            #
+            #
+            #
+            #             # Look for the dropdown that appears after typing and click first option
+            #             try:
+            #                 # Wait for dropdown to appear and find the first visible suggestion
+            #                 dropdown_suggestions = WebDriverWait(self.driver, 5).until(
+            #                     lambda driver: driver.find_elements(By.CSS_SELECTOR, "ul li, [role='listbox'] li, .typeahead li")
+            #                 )
+            #                 if dropdown_suggestions:
+            #                     # Click the first suggestion from the dropdown
+            #                     first_suggestion = dropdown_suggestions[0]
+            #                     suggestion_text = first_suggestion.text.strip()
+            #                     if suggestion_text:
+            #                         first_suggestion.click()
+            #                         logger.info(f"Selected first company suggestion: {suggestion_text}")
+            #                     else:
+            #                         logger.warning("First suggestion has no text")
+            #                 else:
+            #                     logger.warning("No dropdown suggestions found")
+            #             except TimeoutException:
+            #                 logger.warning("Dropdown suggestions did not appear")
+            #
+            #             time.sleep(1)
+            #
+            #             # Look for "Show results" button
+            #             show_results_button = None
+            #             all_buttons = self.driver.find_elements(By.TAG_NAME, "button")
+            #             for button in all_buttons:
+            #                 button_text = (button.text or "").lower()
+            #                 inner_html = (button.get_attribute("innerHTML") or "").lower()
+            #
+            #                 if ('show results' in button_text or 'show results' in inner_html or
+            #                     'apply' in button_text or 'search' in button_text) and button.is_enabled() and button.is_displayed():
+            #                     show_results_button = button
+            #                     logger.info(f"Found Show results button: text='{button.text}'")
+            #                     break
+            #
+            #             if show_results_button:
+            #                 show_results_button.click()
+            #                 time.sleep(3)
+            #                 logger.info("Clicked Show results button")
+            #             else:
+            #                 logger.warning("Could not find Show results button")
+            #         else:
+            #             logger.warning("Could not find company input field")
+            #     else:
+            #         logger.warning("Could not find Add company button")
+            # except Exception as e:
+            #     logger.warning(f"Error handling company filter: {str(e)}")
+
             # Alternative selectors to bypass encrypted classes
             selectors_to_try = [
                 # New LinkedIn layout selectors
@@ -160,16 +274,20 @@ class LinkedInAgent:
                             profile_url = href
                             name = link.get_attribute("aria-label") or link.text.strip()
                             if name and not name.startswith("View"):
+                                # Split by newline and get first part (clean name)
+                                name = name.split('\n')[0].strip()
+                                # If name has multiple words, just take the first name
+                                name = name.split(' ')[0].strip()
                                 break
                     
-                    # Method 2: Look for span with dir="ltr" (common pattern)
-                    if not name:
-                        name_spans = result.find_elements(By.CSS_SELECTOR, 'span[dir="ltr"]')
-                        for span in name_spans:
-                            text = span.text.strip()
-                            if text and len(text) > 3 and not any(word in text.lower() for word in ['view', 'connect', 'message']):
-                                name = text
-                                break
+                    # # Method 2: Look for span with dir="ltr" (common pattern)
+                    # if not name:
+                    #     name_spans = result.find_elements(By.CSS_SELECTOR, 'span[dir="ltr"]')
+                    #     for span in name_spans:
+                    #         text = span.text.strip()
+                    #         if text and len(text) > 3 and not any(word in text.lower() for word in ['view', 'connect', 'message']):
+                    #             name = text
+                    #             break
                     
                     # Method 3: Find title/subtitle using flexible approach
                     title = ""
@@ -215,10 +333,45 @@ class LinkedInAgent:
             logger.error(f"Error searching for people at {company_name}: {str(e)}")
             return []
     
+    def extract_latest_company(self) -> Optional[str]:
+        """Extract the latest company from the person's profile experience section"""
+        try:
+            # Look for spans that contain "Full-time" text anywhere on the page
+            all_spans = self.driver.find_elements(By.TAG_NAME, "span")
+                
+            for span in all_spans:
+                span_text = span.text.strip()
+                if "Full-time" in span_text:
+                    # Extract company name from text like "Blinkit · Full-time\nBlinkit · Full-time"
+                    # Split by newline and take first part, then split by "·" and take first part
+                    company_text = span_text.split('\n')[0].split('·')[0].split('-')[0].strip()
+
+                    if (company_text and
+                        len(company_text) > 2 and len(company_text) < 80 and
+                        any(char.isupper() for char in company_text)):  # Likely a proper company name
+                        logger.info(f"Found company from Full-time span: {company_text}")
+                        return company_text
+                    
+        except Exception as e:
+            logger.warning(f"Error extracting company: {str(e)}")
+        
+        return None
+    
     def send_connection_request(self, person: Person) -> bool:
         try:
             self.driver.get(person.profile_url)
             time.sleep(2)
+            
+            # Extract actual company from latest experience on profile page
+            actual_company = self.extract_latest_company()
+            if actual_company:
+                # Update person's company with actual company from profile
+                person.company = actual_company
+                logger.info(f"Updated company for {person.name}: {actual_company}")
+            else:
+                logger.error(f"Could not extract company for {person.name}, skipping connection request")
+                return False
+
             
             # Debug: Let's see what buttons are actually on the page
             logger.info("=== DEBUG: Looking for Connect button ===")
@@ -324,8 +477,13 @@ class LinkedInAgent:
                 )
                 
                 note_field = WebDriverWait(self.driver, 5).until(
-                    EC.presence_of_element_located((By.TAG_NAME, "textarea"))
+                    EC.element_to_be_clickable((By.TAG_NAME, "textarea"))
                 )
+                time.sleep(2)
+                # Scroll into view and click to focus
+                self.driver.execute_script("arguments[0].scrollIntoView();", note_field)
+                note_field.click()
+                time.sleep(1)
                 note_field.send_keys(message)
                 
                 # Find Send button using the robust method
@@ -348,7 +506,7 @@ class LinkedInAgent:
                     logger.error("Could not find Send button")
                     raise Exception("Could not find Send button")
                 
-            except TimeoutException:
+            except Exception as e:
                 logger.error("Could not find Send now button")
                 raise Exception("Could not find Send now button")
         
