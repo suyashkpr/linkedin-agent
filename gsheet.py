@@ -447,20 +447,38 @@ class CompanyTracker(GoogleSheetsManager):
             
             worksheet = self.get_worksheet(self.worksheet_name)
             row_number = company_data["row_number"]
-            
-            # Get next person column
-            next_person_column = self._get_next_person_column()
-            
-            # Find the column number for the new person column
             headers = worksheet.row_values(1)
             
-            # Check if this person column already exists in headers
-            if next_person_column in headers:
-                col_number = headers.index(next_person_column) + 1
-            else:
-                # Add new column header
-                col_number = len(headers) + 1
-                worksheet.update_cell(1, col_number, next_person_column)
+            # Get current row data to check for empty Person columns
+            current_row = worksheet.row_values(row_number)
+            
+            # Find the first empty Person column in this specific row
+            col_number = None
+            target_person_column = None
+            
+            # Check existing Person columns for empty cells
+            for i, header in enumerate(headers):
+                if header.startswith("Person "):
+                    col_idx = i + 1  # 1-indexed
+                    if col_idx > len(current_row) or not current_row[col_idx - 1]:  # Empty cell
+                        col_number = col_idx
+                        target_person_column = header
+                        logger.info(f"Found empty Person column: {header}")
+                        break
+            
+            # If no empty Person column found, create a new one
+            if col_number is None:
+                target_person_column = self._get_next_person_column()
+                
+                # Check if this person column already exists in headers
+                if target_person_column in headers:
+                    col_number = headers.index(target_person_column) + 1
+                else:
+                    # Add new column header
+                    col_number = len(headers) + 1
+                    worksheet.update_cell(1, col_number, target_person_column)
+                
+                logger.info(f"Created new Person column: {target_person_column}")
             
             # Format person data as clickable hyperlink
             person_data = f'=HYPERLINK("{linkedin_url}","{person_name}")'
@@ -468,7 +486,7 @@ class CompanyTracker(GoogleSheetsManager):
             # Add person data to the company row
             worksheet.update_cell(row_number, col_number, person_data)
             
-            logger.info(f"Added {person_name} to company {company_id} in column {next_person_column}")
+            logger.info(f"Added {person_name} to company {company_id} in column {target_person_column}")
             
         except Exception as e:
             logger.error(f"Failed to add person to company: {str(e)}")

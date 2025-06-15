@@ -12,7 +12,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from selenium.common.exceptions import TimeoutException, NoSuchElementException, ElementClickInterceptedException
 import logging
 
 from gsheet import CompanyTracker
@@ -178,7 +178,7 @@ class LinkedInAgent:
                     potential_title_elements = []
                     
                     # Try common patterns for job titles
-                    potential_title_elements.extend(result.find_elements(By.TAG_NAME, "p"))
+                    # potential_title_elements.extend(result.find_elements(By.TAG_NAME, "p"))
                     potential_title_elements.extend(result.find_elements(By.TAG_NAME, "div"))
                     potential_title_elements.extend(result.find_elements(By.TAG_NAME, "span"))
                     
@@ -218,26 +218,99 @@ class LinkedInAgent:
     def extract_latest_company(self) -> Optional[str]:
         """Extract the latest company from the person's profile experience section"""
         try:
-            # Look for spans that contain "Full-time" text anywhere on the page
-            all_spans = self.driver.find_elements(By.TAG_NAME, "span")
-                
-            for span in all_spans:
-                span_text = span.text.strip()
-                if "Full-time" in span_text:
-                    # Extract company name from text like "Blinkit · Full-time\nBlinkit · Full-time"
-                    # Split by newline and take first part, then split by "·" and take first part
-                    company_text = span_text.split('\n')[0].split('·')[0].split('-')[0].strip()
-
-                    if (company_text and
-                        len(company_text) > 2 and len(company_text) < 80 and
-                        any(char.isupper() for char in company_text)):  # Likely a proper company name
-                        logger.info(f"Found company from Full-time span: {company_text}")
-                        return company_text
+            # Look for "a" tags with data-field="experience_company_logo"
+            all_links = self.driver.find_elements(By.TAG_NAME, "a")
+            
+            for link in all_links:
+                data_field = link.get_attribute("data-field")
+                if data_field == "experience_company_logo":
+                    href = link.get_attribute("href")
+                    if href:
+                        # Store current URL to navigate back
+                        current_url = self.driver.current_url
+                        
+                        # Navigate to company page
+                        self.driver.get(href)
+                        time.sleep(2)
+                        
+                        # Find h1 element and get company name
+                        h1_elements = self.driver.find_elements(By.TAG_NAME, "h1")
+                        for h1 in h1_elements:
+                            company_text = h1.text.strip()
+                            if (company_text and
+                                len(company_text) > 2 and len(company_text) < 80 and
+                                any(char.isupper() for char in company_text)):
+                                logger.info(f"Found company from experience_company_logo: {company_text}")
+                                
+                                # Navigate back to original page
+                                self.driver.get(current_url)
+                                time.sleep(2)
+                                
+                                return company_text
+                        
+                        # Navigate back even if no h1 found
+                        self.driver.get(current_url)
+                        time.sleep(2)
                     
         except Exception as e:
             logger.warning(f"Error extracting company: {str(e)}")
         
         return None
+    
+    def _find_button_by_text(self, buttons, search_terms, button_type="button"):
+        """Helper method to find a button by searching for text in aria-label, text, or innerHTML"""
+        for button in buttons:
+            aria_label = (button.get_attribute("aria-label") or "").lower()
+            button_text = (button.text or "").lower()
+            inner_html = (button.get_attribute("innerHTML") or "").lower()
+            
+            for term in search_terms:
+                if (term in aria_label or term in button_text or term in inner_html) and \
+                   button.is_enabled() and button.is_displayed():
+                    logger.info(f"Found {button_type} button: aria-label='{button.get_attribute('aria-label')}', text='{button.text}'")
+                    return button
+        return None
+    
+    def _find_connect_button_in_more_menu(self):
+        """Try to find Connect button by clicking More button first"""
+        all_buttons = self.driver.find_elements(By.TAG_NAME, "button")
+        
+        # Find More button
+        more_button = self._find_button_by_text(all_buttons, ['more'], "More")
+        
+        if more_button:
+            try:
+                more_button.click()
+                time.sleep(1)  # Wait for dropdown/menu to appear
+                
+                # Look for Connect button in the expanded menu (check both button and div elements)
+                menu_elements = self.driver.find_elements(By.TAG_NAME, "button") + self.driver.find_elements(By.TAG_NAME, "div")
+                connect_button = self._find_button_by_text(menu_elements, ['connect'], "Connect (in More menu)")
+                
+                return connect_button
+                
+            except Exception as e:
+                logger.warning(f"Failed to click More button or find Connect in menu: {str(e)}")
+                return None
+        
+        return None
+    
+    def _try_click_button(self, button, button_type="button"):
+        """Try to click a button with fallback for click intercepted exceptions"""
+        try:
+            button.click()
+            return True
+        except ElementClickInterceptedException:
+            logger.warning(f"{button_type} button click intercepted, trying JavaScript click")
+            try:
+                self.driver.execute_script("arguments[0].click();", button)
+                return True
+            except Exception as e:
+                logger.error(f"Failed to click {button_type} button with JavaScript: {str(e)}")
+                return False
+        except Exception as e:
+            logger.error(f"Failed to click {button_type} button: {str(e)}")
+            return False
     
     def send_connection_request(self, person: Person, company_id: str = None) -> bool:
         try:
@@ -281,39 +354,38 @@ class LinkedInAgent:
                 button_class = button.get_attribute("class") or "No class"
                 logger.info(f"Button {i}: aria-label='{aria_label}', text='{button_text}', class='{button_class[:50]}...'")
             
-            # Try multiple methods to find the Connect button
+            # Try to find Connect button using multiple methods
             connect_button = None
 
-            # Method 4: Manual search through all buttons
-            if not connect_button:
-                logger.info("Trying manual search through all buttons...")
-                for button in all_buttons:
-                    aria_label = (button.get_attribute("aria-label") or "").lower()
-                    button_text = (button.text or "").lower()
-                    # Also check inner HTML for "Connect" text
-                    inner_html = (button.get_attribute("innerHTML") or "").lower()
-                    
-                    if (('connect' in aria_label or 'connect' in button_text or 'connect' in inner_html) and 
-                        button.is_enabled() and button.is_displayed()):
-                        connect_button = button
-                        logger.info(f"Found Connect button manually: aria-label='{button.get_attribute('aria-label')}', text='{button.text}', innerHTML contains connect")
-                        break
+            # Method 1: Direct search for Connect button
+            logger.info("Trying direct search for Connect button...")
+            connect_button = self._find_button_by_text(all_buttons, ['connect'], "Connect")
             
+            # Method 2: Try clicking Connect button, fallback to More menu if click intercepted
+            if connect_button:
+                if self._try_click_button(connect_button, "Connect"):
+                    # Connect button clicked successfully
+                    pass
+                else:
+                    # Connect button click failed, try More button approach
+                    logger.info("Connect button click failed, trying More button approach...")
+                    connect_button = self._find_connect_button_in_more_menu()
+                    if connect_button:
+                        if not self._try_click_button(connect_button, "Connect (from More menu)"):
+                            connect_button = None
+            else:
+                # No direct Connect button found, try More button approach
+                logger.info("Direct Connect button not found, trying More button approach...")
+                connect_button = self._find_connect_button_in_more_menu()
+                if connect_button:
+                    if not self._try_click_button(connect_button, "Connect (from More menu)"):
+                        connect_button = None
+            
+            # If still no Connect button found or clicked, check for Message button
             if not connect_button:
-                # Check if Message button exists (indicates already connected)
-                message_button = None
-                logger.info("Connect button not found, checking for Message button...")
-                
-                for button in all_buttons:
-                    aria_label = (button.get_attribute("aria-label") or "").lower()
-                    button_text = (button.text or "").lower()
-                    inner_html = (button.get_attribute("innerHTML") or "").lower()
-                    
-                    if (('message' in aria_label or 'message' in button_text or 'message' in inner_html) and 
-                        button.is_enabled() and button.is_displayed()):
-                        message_button = button
-                        logger.info(f"Found Message button: aria-label='{button.get_attribute('aria-label')}', text='{button.text}'")
-                        break
+                logger.info("Connect button still not found or clickable, checking for Message button...")
+                all_buttons = self.driver.find_elements(By.TAG_NAME, "button")
+                message_button = self._find_button_by_text(all_buttons, ['message'], "Message")
                 
                 if message_button:
                     logger.info(f"Person {person.name} appears to already be connected (Message button found), skipping")
@@ -322,10 +394,8 @@ class LinkedInAgent:
                 # Neither Connect nor Message button found - this is an error
                 with open('debug_page.html', 'w', encoding='utf-8') as f:
                     f.write(self.driver.page_source)
-                logger.error("Could not find Connect or Message button. Page source saved to debug_page.html")
-                raise Exception("Could not find Connect or Message button")
-            
-            connect_button.click()
+                logger.error("Could not find or click Connect button, and no Message button found. Page source saved to debug_page.html")
+                raise Exception("Could not find or click Connect button")
             
             try:
                 # Try to find "Add a note" button using multiple methods
@@ -411,7 +481,7 @@ class LinkedInAgent:
             # Update company status with error message if company_id is provided
             if company_id:
                 try:
-                    self.tracker.update_company_status(company_id, "Error", error_message)
+                    self.tracker.update_company_status(company_id, error_message)
                     logger.info(f"Updated status for company {company_id} with error message")
                 except Exception as status_error:
                     logger.error(f"Failed to update status for company {company_id}: {str(status_error)}")
@@ -424,22 +494,19 @@ class LinkedInAgent:
         for company in companies:
             logger.info(f"Processing company: {company}")
 
-            if company['Status'] != '':
+            if company['status'] != '':
+                logger.info(f"Skipping company: {company} because status is not empty")
                 continue
 
-            people = self.search_company_people(company['Company Name'])
+            people = self.search_company_people(company['company_name'])
             sent_count = 0
             
             for person in people:
                 if self.send_connection_request(person, company['company_id']):
                     sent_count += 1
-                
+
                 if sent_count >= self.config.max_connections_per_company:
                     break
-
-
-
-            results[company] = sent_count
             
             # Mark status as successful only if status is currently empty and we sent at least one request
             if sent_count > 0:
