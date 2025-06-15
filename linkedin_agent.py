@@ -15,6 +15,8 @@ from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 import logging
 
+from gsheet import CompanyTracker
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -39,6 +41,11 @@ class LinkedInAgent:
         self.driver = None
         self.cookies_file = "linkedin_cookies.pkl"
         self.setup_driver()
+        self.tracker = CompanyTracker(
+            credentials_file="gcloud.json",
+            spreadsheet_name="Shruti Company Reachout",
+            worksheet_name="Sheet1"  # Optional, uses first sheet if not provided
+        )
     
     def setup_driver(self):
         chrome_options = Options()
@@ -123,121 +130,6 @@ class LinkedInAgent:
             
             time.sleep(self.config.waiting_time)
             
-            # # Click "All filters" button to open filters
-            # try:
-            #     all_filters_button = None
-            #
-            #     # Look for "All filters" button using manual search
-            #     all_buttons = self.driver.find_elements(By.TAG_NAME, "button")
-            #     for button in all_buttons:
-            #         button_text = (button.text or "").lower()
-            #         inner_html = (button.get_attribute("innerHTML") or "").lower()
-            #
-            #         if ('all filters' in button_text or 'all filters' in inner_html) and button.is_enabled() and button.is_displayed():
-            #             all_filters_button = button
-            #             logger.info(f"Found All filters button: text='{button.text}'")
-            #             break
-            #
-            #     if all_filters_button:
-            #         all_filters_button.click()
-            #         time.sleep(2)
-            #         logger.info("Clicked All filters button")
-            #     else:
-            #         logger.warning("Could not find All filters button")
-            # except Exception as e:
-            #     logger.warning(f"Error clicking All filters button: {str(e)}")
-            #
-            # # Now handle company filtering in the opened filters dialog
-            # try:
-            #     # Look for "Add a company" button or input field
-            #     time.sleep(1)
-            #
-            #     # Try to find "Add a company" button
-            #     add_company_button = None
-            #     all_buttons = self.driver.find_elements(By.TAG_NAME, "button")
-            #     for button in all_buttons:
-            #         button_text = (button.text or "").lower()
-            #         inner_html = (button.get_attribute("innerHTML") or "").lower()
-            #
-            #         if ('add a company' in button_text or 'add a company' in inner_html or
-            #             'company' in button_text or 'company' in inner_html) and button.is_enabled() and button.is_displayed():
-            #             add_company_button = button
-            #             logger.info(f"Found Add company button: text='{button.text}'")
-            #             break
-            #
-            #     if add_company_button:
-            #         add_company_button.click()
-            #         time.sleep(1)
-            #
-            #         # Look for company input field
-            #         company_input = None
-            #         inputs = self.driver.find_elements(By.TAG_NAME, "input")
-            #         for input_field in inputs:
-            #             placeholder = (input_field.get_attribute("placeholder") or "").lower()
-            #             if 'company' in placeholder and input_field.is_enabled() and input_field.is_displayed():
-            #                 company_input = input_field
-            #                 logger.info(f"Found company input field with placeholder: '{input_field.get_attribute('placeholder')}'")
-            #                 break
-            #
-            #         if company_input:
-            #             # Type the company name
-            #             company_input.clear()
-            #             company_input.send_keys(company_name)
-            #             time.sleep(2)
-            #             # Click the input box again to trigger suggestions
-            #             company_input.click()
-            #
-            #
-            #
-            #             # Look for the dropdown that appears after typing and click first option
-            #             try:
-            #                 # Wait for dropdown to appear and find the first visible suggestion
-            #                 dropdown_suggestions = WebDriverWait(self.driver, 5).until(
-            #                     lambda driver: driver.find_elements(By.CSS_SELECTOR, "ul li, [role='listbox'] li, .typeahead li")
-            #                 )
-            #                 if dropdown_suggestions:
-            #                     # Click the first suggestion from the dropdown
-            #                     first_suggestion = dropdown_suggestions[0]
-            #                     suggestion_text = first_suggestion.text.strip()
-            #                     if suggestion_text:
-            #                         first_suggestion.click()
-            #                         logger.info(f"Selected first company suggestion: {suggestion_text}")
-            #                     else:
-            #                         logger.warning("First suggestion has no text")
-            #                 else:
-            #                     logger.warning("No dropdown suggestions found")
-            #             except TimeoutException:
-            #                 logger.warning("Dropdown suggestions did not appear")
-            #
-            #             time.sleep(1)
-            #
-            #             # Look for "Show results" button
-            #             show_results_button = None
-            #             all_buttons = self.driver.find_elements(By.TAG_NAME, "button")
-            #             for button in all_buttons:
-            #                 button_text = (button.text or "").lower()
-            #                 inner_html = (button.get_attribute("innerHTML") or "").lower()
-            #
-            #                 if ('show results' in button_text or 'show results' in inner_html or
-            #                     'apply' in button_text or 'search' in button_text) and button.is_enabled() and button.is_displayed():
-            #                     show_results_button = button
-            #                     logger.info(f"Found Show results button: text='{button.text}'")
-            #                     break
-            #
-            #             if show_results_button:
-            #                 show_results_button.click()
-            #                 time.sleep(3)
-            #                 logger.info("Clicked Show results button")
-            #             else:
-            #                 logger.warning("Could not find Show results button")
-            #         else:
-            #             logger.warning("Could not find company input field")
-            #     else:
-            #         logger.warning("Could not find Add company button")
-            # except Exception as e:
-            #     logger.warning(f"Error handling company filter: {str(e)}")
-
-            # Alternative selectors to bypass encrypted classes
             selectors_to_try = [
                 # New LinkedIn layout selectors
                 '[data-view-name="search-entity-result-universal-template"]',
@@ -280,16 +172,6 @@ class LinkedInAgent:
                                 name = name.split(' ')[0].strip()
                                 break
                     
-                    # # Method 2: Look for span with dir="ltr" (common pattern)
-                    # if not name:
-                    #     name_spans = result.find_elements(By.CSS_SELECTOR, 'span[dir="ltr"]')
-                    #     for span in name_spans:
-                    #         text = span.text.strip()
-                    #         if text and len(text) > 3 and not any(word in text.lower() for word in ['view', 'connect', 'message']):
-                    #             name = text
-                    #             break
-                    
-                    # Method 3: Find title/subtitle using flexible approach
                     title = ""
                     
                     # Look for any element that might contain job title
@@ -357,8 +239,23 @@ class LinkedInAgent:
         
         return None
     
-    def send_connection_request(self, person: Person) -> bool:
+    def send_connection_request(self, person: Person, company_id: str = None) -> bool:
         try:
+            # Check if person already exists in tracker for this company
+            if company_id:
+                try:
+                    company_data = self.tracker.get_company_row(company_id)
+                    if company_data:
+                        # Check if person's URL already exists in the people list
+                        for existing_person in company_data['people']:
+                            # Extract URL from HYPERLINK formula if present
+                            person_data = existing_person['data']
+                            if person.profile_url in person_data:
+                                logger.info(f"Person {person.name} ({person.profile_url}) already exists for company {company_id}, skipping")
+                                return False
+                except Exception as e:
+                    logger.warning(f"Could not check existing people for company {company_id}: {str(e)}")
+            
             self.driver.get(person.profile_url)
             time.sleep(2)
             
@@ -386,36 +283,7 @@ class LinkedInAgent:
             
             # Try multiple methods to find the Connect button
             connect_button = None
-            
-            # # Method 1: Look for button with aria-label containing "Invite" and "connect"
-            # try:
-            #     connect_button = WebDriverWait(self.driver, 3).until(
-            #         EC.element_to_be_clickable((By.XPATH, "//button[contains(@aria-label, 'Invite') and contains(@aria-label, 'connect')]"))
-            #     )
-            #     logger.info("Found Connect button using Method 1")
-            # except TimeoutException:
-            #     pass
-            #
-            # # Method 2: Look for button with aria-label just containing "connect"
-            # if not connect_button:
-            #     try:
-            #         connect_button = WebDriverWait(self.driver, 3).until(
-            #             EC.element_to_be_clickable((By.XPATH, "//button[contains(@aria-label, 'connect')]"))
-            #         )
-            #         logger.info("Found Connect button using Method 2")
-            #     except TimeoutException:
-            #         pass
-            #
-            # # Method 3: Look for button with span text "Connect"
-            # if not connect_button:
-            #     try:
-            #         connect_button = WebDriverWait(self.driver, 3).until(
-            #             EC.element_to_be_clickable((By.XPATH, "//button[.//span[text()='Connect']]"))
-            #         )
-            #         logger.info("Found Connect button using Method 3")
-            #     except TimeoutException:
-            #         pass
-            
+
             # Method 4: Manual search through all buttons
             if not connect_button:
                 logger.info("Trying manual search through all buttons...")
@@ -432,25 +300,36 @@ class LinkedInAgent:
                         break
             
             if not connect_button:
-                # Save page source for debugging
+                # Check if Message button exists (indicates already connected)
+                message_button = None
+                logger.info("Connect button not found, checking for Message button...")
+                
+                for button in all_buttons:
+                    aria_label = (button.get_attribute("aria-label") or "").lower()
+                    button_text = (button.text or "").lower()
+                    inner_html = (button.get_attribute("innerHTML") or "").lower()
+                    
+                    if (('message' in aria_label or 'message' in button_text or 'message' in inner_html) and 
+                        button.is_enabled() and button.is_displayed()):
+                        message_button = button
+                        logger.info(f"Found Message button: aria-label='{button.get_attribute('aria-label')}', text='{button.text}'")
+                        break
+                
+                if message_button:
+                    logger.info(f"Person {person.name} appears to already be connected (Message button found), skipping")
+                    return False
+                
+                # Neither Connect nor Message button found - this is an error
                 with open('debug_page.html', 'w', encoding='utf-8') as f:
                     f.write(self.driver.page_source)
-                logger.error("Could not find Connect button. Page source saved to debug_page.html")
-                raise Exception("Could not find Connect button")
+                logger.error("Could not find Connect or Message button. Page source saved to debug_page.html")
+                raise Exception("Could not find Connect or Message button")
             
             connect_button.click()
             
             try:
                 # Try to find "Add a note" button using multiple methods
                 add_note_button = None
-                
-                # Method 1: XPath with text
-                # try:
-                #     add_note_button = WebDriverWait(self.driver, 3).until(
-                #         EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Add a note')]"))
-                #     )
-                # except TimeoutException:
-                #     pass
                 
                 # Method 2: Manual search through all buttons
                 if not add_note_button:
@@ -512,32 +391,70 @@ class LinkedInAgent:
         
             logger.info(f"Connection request sent to {person.name}")
             
+            # Add person to tracker if company_id is provided
+            if company_id:
+                try:
+                    self.tracker.add_person_to_company(company_id, person.name, person.profile_url)
+                    logger.info(f"Added {person.name} to company {company_id} in tracker")
+                except Exception as e:
+                    logger.error(f"Failed to add {person.name} to tracker: {str(e)}")
+            
             delay = random.uniform(*self.config.delay_between_requests)
             time.sleep(delay)
             
             return True
             
         except Exception as e:
-            logger.error(f"Failed to send connection request to {person.name}: {str(e)}")
+            error_message = f"Failed to send connection request to {person.name}: {str(e)}"
+            logger.error(error_message)
+            
+            # Update company status with error message if company_id is provided
+            if company_id:
+                try:
+                    self.tracker.update_company_status(company_id, "Error", error_message)
+                    logger.info(f"Updated status for company {company_id} with error message")
+                except Exception as status_error:
+                    logger.error(f"Failed to update status for company {company_id}: {str(status_error)}")
+            
             return False
     
-    def process_companies(self, companies: List[str]) -> Dict[str, int]:
+    def process_companies(self, companies: List[Dict[str, any]]) -> Dict[str, int]:
         results = {}
         
         for company in companies:
             logger.info(f"Processing company: {company}")
-            
-            people = self.search_company_people(company)
+
+            if company['Status'] != '':
+                continue
+
+            people = self.search_company_people(company['Company Name'])
             sent_count = 0
             
             for person in people:
-                if self.send_connection_request(person):
+                if self.send_connection_request(person, company['company_id']):
                     sent_count += 1
                 
                 if sent_count >= self.config.max_connections_per_company:
                     break
-            
+
+
+
             results[company] = sent_count
+            
+            # Mark status as successful only if status is currently empty and we sent at least one request
+            if sent_count > 0:
+                try:
+                    # Check current status first
+                    company_data = self.tracker.get_company_row(company['company_id'])
+                    if company_data and company_data['status'] == '':
+                        self.tracker.update_company_status(
+                            company['company_id'], 
+                            "Completed", 
+                            f"Successfully sent {sent_count} connection requests"
+                        )
+                        logger.info(f"Marked company {company['company_id']} as completed")
+                except Exception as e:
+                    logger.error(f"Failed to update completion status for company {company['company_id']}: {str(e)}")
             
             time.sleep(random.uniform(10, 20))
         
@@ -548,8 +465,15 @@ class LinkedInAgent:
             self.driver.quit()
 
 def main():
-    with open('companies.json', 'r') as f:
-        companies = json.load(f)
+    # Initialize tracker to get companies from Google Sheets
+    tracker = CompanyTracker(
+        credentials_file="gcloud.json",
+        spreadsheet_name="Shruti Company Reachout",
+        worksheet_name="Sheet1"
+    )
+    
+    # Get companies from Google Sheets
+    companies = tracker.get_all_companies()
     
     with open('config.json', 'r') as f:
         config_data = json.load(f)
